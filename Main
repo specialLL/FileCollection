@@ -1,0 +1,183 @@
+using System;
+using System.Collections.Generic;
+
+public class FileCollection
+{
+    private class File
+    {
+        public string FileName;
+        public int Size;
+
+        public File(string name, int size)
+        {
+            this.FileName = name;
+            this.Size = size;
+        }
+    }
+
+    private Dictionary<string, List<File>> collectionMap;
+    private Dictionary<string, int> collectionFilesSize;
+    private int totalFileSize;
+
+    public FileCollection()
+    {
+        this.collectionMap = new Dictionary<string, List<File>>();
+        this.collectionFilesSize = new Dictionary<string, int>();
+        this.totalFileSize = 0;
+    }
+
+    public int AddFile(string fileName, int size, List<string> collections)
+    {
+        this.totalFileSize += size;
+        File file = new File(fileName, size);
+
+        if (collections == null)
+        {
+            return this.totalFileSize;
+        }
+
+        foreach (string collection in collections)
+        {
+            collectionMap.TryAdd(collection, new List<File>());
+            collectionMap[collection].Add(file);
+
+            collectionFilesSize[collection] = collectionFilesSize.GetValueOrDefault(collection, 0) + size;
+        }
+
+        return this.totalFileSize;
+    }
+
+    // Return in sorted order
+    // Sort by name of collections if size is the same
+    public KeyValuePair<string, int>[] CalculateTopK(int k)
+    {
+        var comparer = Comparer<KeyValuePair<string, int>>.Create((o1, o2) =>
+        {
+            if (o1.Value < o2.Value)
+            {
+                return -1;
+            }
+            if (o1.Value > o2.Value)
+            {
+                return 1;
+            }
+
+            return string.Compare(o1.Key, o2.Key, StringComparison.Ordinal);
+        });
+
+        var queue = new PriorityQueue<KeyValuePair<string, int>>(k, comparer);
+
+        foreach (var entry in collectionFilesSize)
+        {
+            queue.Enqueue(entry);
+
+            if (queue.Count > k)
+            {
+                queue.Dequeue();
+            }
+        }
+
+        var topK = new KeyValuePair<string, int>[queue.Count];
+        for (int i = queue.Count - 1; i >= 0; i--)
+        {
+            topK[i] = queue.Dequeue();
+        }
+
+        return topK;
+    }
+
+    public static void Main(string[] args)
+    {
+        /*
+        file1.txt(size: 100)
+        file2.txt(size: 200) in collection "collection1"
+        file3.txt(size: 200) in collection "collection1"
+        file4.txt(size: 300) in collection "collection2"
+        file5.txt(size: 100)
+        */
+        FileCollection fc = new FileCollection();
+        fc.AddFile("file1.txt", 100, null);
+        fc.AddFile("file2.txt", 200, new List<string> { "collection1" });
+        fc.AddFile("file3.txt", 200, new List<string> { "collection1" });
+        fc.AddFile("file4.txt", 300, new List<string> { "collection2" });
+        Console.WriteLine(fc.AddFile("file5.txt", 100, null));
+
+        var topK = fc.CalculateTopK(2);
+        Console.WriteLine("Top 2 collections:");
+        foreach (var entry in topK)
+        {
+            Console.WriteLine($"{entry.Key} : {entry.Value}");
+        }
+    }
+}
+
+// Priority Queue Implementation
+public class PriorityQueue<T>
+{
+    private List<T> heap;
+    private readonly IComparer<T> comparer;
+
+    public int Count => heap.Count;
+
+    public PriorityQueue(IComparer<T> comparer = null)
+    {
+        this.heap = new List<T>();
+        this.comparer = comparer ?? Comparer<T>.Default;
+    }
+
+    public PriorityQueue(int capacity, IComparer<T> comparer = null)
+    {
+        this.heap = new List<T>(capacity);
+        this.comparer = comparer ?? Comparer<T>.Default;
+    }
+
+    public void Enqueue(T item)
+    {
+        heap.Add(item);
+        int i = Count - 1;
+
+        while (i > 0)
+        {
+            int parent = (i - 1) / 2;
+
+            if (comparer.Compare(heap[parent], item) <= 0)
+                break;
+
+            heap[i] = heap[parent];
+            i = parent;
+        }
+
+        heap[i] = item;
+    }
+
+    public T Dequeue()
+    {
+        T root = heap[0];
+        int lastIndex = Count - 1;
+        T last = heap[lastIndex];
+        heap.RemoveAt(lastIndex);
+
+        if (lastIndex > 0)
+        {
+            int i = 0;
+
+            while (i < lastIndex / 2)
+            {
+                int child = 2 * i + 1;
+
+                if (child < lastIndex && comparer.Compare(heap[child], heap[child + 1]) > 0)
+                    child++;
+
+                if (comparer.Compare(last, heap[child]) <= 0)
+                    break;
+
+                heap[i] = heap[child];
+                i = child;
+            }
+
+            heap[i] = last;
+        }
+
+        return root;
+    }
+}
